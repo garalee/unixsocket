@@ -2,9 +2,12 @@ CC=gcc
 LIBS = -lpthread
 
 
-all:
-	gcc -o server server.c
-	gcc -o client tcpcli.c
+server : 
+	$(CC) -o server server.c -g
 
-server : server.o
-	$(CC) gcc
+client :
+	$(CC) -o client client.c -g
+
+clean : 
+	rm client
+	rm server
