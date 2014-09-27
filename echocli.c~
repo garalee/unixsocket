@@ -1,0 +1,55 @@
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+#include<unistd.h>
+#include<arpa/inet.h>
+#include<sys/socket.h>
+
+#define BUF_SIZE 1024
+
+int main(int argc, char *argv[])
+{
+  int sockfd;
+  char message[BUF_SIZE];
+  int str_len;
+  struct sockaddr_in servaddr;
+
+  if(argc != 3)
+    {
+      printf("Usage : %s <IP> <port>\n", argv[0]);
+      exit(1);
+    }
+  sockfd = socket(PF_INET, SOCK_STREAM, 0);
+  if(sockfd == -1)
+    printf("socket error\n");
+  
+  memset(&servaddr, 0, sizeof(servaddr));
+  servaddr.sin_family = AF_INET;
+  servaddr.sin_addr.s_addr = inet_addr(argv[1]);
+  servaddr.sin_port = htons(atoi(argv[2]));
+
+  if(connect(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) == -1)
+    {
+      printf("connect error\n");
+    }
+  else
+    {
+      printf("connect.....\n");
+    }
+
+  while(1)
+    {
+      fputs("input message(q to quit): ",stdout);
+      fgets(message, BUF_SIZE, stdin);
+
+      if(!strcmp(message, "q\n")||!strcmp(message, "Q\n"))
+	break;
+
+      write(sockfd, message, strlen(message));
+      str_len = read(sockfd, message, BUF_SIZE -1);
+      message[str_len] = 0;
+      printf("Message from server: %s\n", message);
+    }
+  close(sockfd);
+  return 0;
+}

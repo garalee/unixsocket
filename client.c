@@ -11,8 +11,7 @@
 #include<arpa/inet.h>
 #include<errno.h>
 
-#define SERVER_PORT 9999
-#define MAX_LINE 1024
+#define MAX_SIZE 1024
 
 #define ECHO_PORT 9998
 #define TIME_PORT 9997
@@ -24,8 +23,8 @@ int main(int argc,char* argv[]){
     int fd;
 
     struct sockaddr_in server_addr; 
-    char buf[MAX_LINE];
-    char input[MAX_LINE];
+    char buf[MAX_SIZE];
+    char input[MAX_SIZE];
     
     pid_t cp;
 
@@ -38,7 +37,7 @@ int main(int argc,char* argv[]){
     printHost(argv[1]);		/* Print Out Peer Information */
     
 
-    /* Socket Initialization */
+    /* Socket Initialization 
     fd = socket(AF_INET,SOCK_STREAM,0);
 
     if(fd < 0){
@@ -51,14 +50,23 @@ int main(int argc,char* argv[]){
     if(connect(fd,(struct sockaddr*)&server_addr,sizeof(server_addr)) < 0){
 	printf("Connection Error : %s\n",strerror(errno));
     }
+    */
 
+    /* ******************************************************************* */
+    /**************** Client Service ************************************* */
+    /* ******************************************************************* */
+
+    /* TODO in Client Service:
+     * print data sent from child process (need pipe)
+     * what if server is not listening for new incoming request.
+     *
+     * */
     while(1){
-	printf("command(case-sensitive), \"quit\" for quit:"); // Command line
-	fgets(input,MAX_LINE,stdin); /* Blocking IO Model */
+	printf("command(case-sensitive)[echo,time,quit]: "); // Command line
+	fgets(input,MAX_SIZE,stdin); /* Blocking IO Model */
 	if(strcmp("echo\n",input) == 0){
 	    cp = fork();
 	    if(cp == 0){	// Child Process
-		close(fd);
 		execlp("xterm","xterm","-e","./echocli",host,(char*) 0);
 	    }else{
 		wait();		// Handling SIGCHD signal
@@ -66,7 +74,6 @@ int main(int argc,char* argv[]){
 	}else if(strcmp("time\n",input) == 0){
 	    cp = fork();
 	    if(cp == 0){
-		close(fd);
 		execlp("xterm","xterm","-e","./timecli",host,(char*)0);
 	    }else{
 		wait();
@@ -76,12 +83,13 @@ int main(int argc,char* argv[]){
 	     * Expected Error : trying to close socket while few other process is still running
 	     *                  trying to close while server is closed already
 	     */
-	    close(fd);
+	    break;
 	}else{
 	    char *p = strtok(input,"\n");
 	    printf("%s is not valid command\n",p);
 	}
     }
+    /* ******************************************************Client Service */
 	
 
     printf("Program Exited Normally\n");
@@ -98,14 +106,16 @@ void printHost(char* host){
 
     char** pptr;
     
+
+    printf("** Host Information **\n");
     if((int)(addr = inet_addr(host)) == -1){
 	hp = gethostbyname(host);
 	if( hp != NULL){
 	    //in_addr = *(struct in_addr*)(hp->h_addr);
-	    printf("Official Host Name :  %s\n",hp->h_name);
+	    printf("Official Server Host Name :  %s\n",hp->h_name);
 	    for(pptr = hp->h_addr_list; *pptr != NULL ; ++pptr){
 		memcpy(&in_addr.s_addr,*pptr,sizeof(in_addr.s_addr));
-		printf("%s, was resolved to : %s\n",host,inet_ntoa(in_addr));
+		printf("The IP address of Server Host(%s) : %s\n",host,inet_ntoa(in_addr));
 	    }
 	}else{
 	    printf("%s was not resolved\n",host);
@@ -114,11 +124,11 @@ void printHost(char* host){
 	inet_pton(AF_INET,host,&in_addr);
 	hp = gethostbyaddr((void*)&in_addr,sizeof(in_addr),AF_INET);
 	if ( hp != NULL){
-	    printf("Official Host Name: %s\n",hp->h_name);
+	    printf("Official Server Host Name: %s\n",hp->h_name);
 	    
 	    for(pptr = hp->h_addr_list;*pptr!=NULL;++pptr){
 		memcpy(&in_addr.s_addr,*pptr,sizeof(in_addr.s_addr));
-		printf("%s\n",inet_ntoa(in_addr));
+		printf("The Host Name of Server Host(%s) : %s\n",host,inet_ntoa(in_addr));
 	    }
 	}else{
 	    printf("Host Information for %s not found\n",host);

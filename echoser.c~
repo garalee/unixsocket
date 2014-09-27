@@ -1,0 +1,97 @@
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+#include<unistd.h>
+#include<arpa/inet.h>
+#include<sys/socket.h>
+#include<signal.h>
+#include<sys/wait.h>
+
+#define BUF_SIZE 1024
+
+void read_childproc(int sig);
+int main(int argc, char* argv[])
+{
+  int sockfd, connfd;
+  char message[BUF_SIZE];
+  int str_len;
+
+  struct sockaddr_in servaddr;
+  struct sockaddr_in clntaddr;
+  socklen_t clnt_adr_sz;
+  
+  pid_t pid;
+  struct sigaction act;
+  int state;
+
+  if(argc!=2)
+    {
+      printf("Usage: %s <port>\n", argv[0]);
+      exit(1);
+    }
+
+  act.sa_handler=read_childproc;
+  sigemptyset(&act.sa_mask);
+  act.sa_flags=0;
+  state=sigaction(SIGCHLD, &act, 0);
+
+  sockfd = socket(PF_INET, SOCK_STREAM, 0);
+  if(sockfd == -1)
+    printf("socket() error");
+
+  memset(&servaddr, 0, sizeof(servaddr));
+  servaddr.sin_family = AF_INET;
+  servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+  servaddr.sin_port = htons(atoi(argv[1]));
+  
+  if(bind(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) == -1)
+    {
+      printf("bind error\n");
+    }
+  if(listen(sockfd, 5) == -1)
+    {
+      printf("listen error\n");
+    }
+
+  for(;;)
+    {
+      clnt_adr_sz = sizeof(clntaddr);
+      connfd = accept(sockfd, (struct sockaddr*)&clntaddr, &clnt_adr_sz);
+      if(connfd == -1)
+	  continue;
+      else
+	  printf("client connected.....\n");
+
+      pid = fork();
+      if(pid == -1)
+	{
+	  close(connfd);
+	  continue;
+	}
+      if(pid == 0)//child process
+	{
+	  close(sockfd);
+	  while((str_len = read(connfd, message, BUF_SIZE))!=0)
+	    {
+	      write(connfd, message, str_len);
+	    }
+	  close(connfd);
+	  printf("client disconnected.....\n");
+	  return 0;
+	}
+      else//parent process
+	{
+	  close(connfd);
+	}
+    }
+  close(sockfd);
+  return 0;
+}
+
+void read_childproc(int sig)
+{
+  pid_t pid;
+  int status;
+  pid = waitpid(-1, &status, WNOHANG);
+  printf("process %d finished\n", pid);
+}
