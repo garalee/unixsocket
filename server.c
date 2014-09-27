@@ -34,7 +34,7 @@ int main(void){
 	clientfd = accept(serverfd,(struct sockaddr*)&client_addr,&clilen);
 	if( fork() == 0){	/* Child Process */
 	    close(serverfd);
-	    /*  */
+	    str_echo(clientfd);
 	    exit(0);
 	}
 	close(clientfd);
@@ -61,6 +61,7 @@ again:
 
     if( n < 0)
 	printf("str_echo: read error\n");
+	
 }
 
 	
