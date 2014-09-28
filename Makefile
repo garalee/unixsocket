@@ -1,43 +1,29 @@
 CC=gcc
-CFLAGS = -W -Wall -g
 
-SRC = echocli.c echoser.c timecli.c timeser.c server.c client.c
-OBJECTS = echocli.o echoser.o timecli.o timeser.o server.o client.o
+SRC = echocli.c timecli.c server.c client.c
+OBJECTS = echocli.o timecli.o server.o client.o
 
-TARGET = server client
-LIBS = -lpthread
-
-$(TARGET) : server client
+TARGET = server client echocli timecli
+LIBS = -pthread
 
 server : server.o
-	$(CC) $(CFLAGS) $^ -o $@
-client : client.o
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $^ -o $@ $(LIBS)
+client : client.c echocli timecli
+	$(CC) client.c -o $@ $(LIBS)
 
-server.o : echoser timeser server.c
-	$(CC) $(CFLAGS) -c server.c -o $@
+server.o : server.c
+	$(CC) -c $^ -o $@
 
-client.o : echocli timecli client.c
-	$(CC) $(CFLAGS) -c client.c -o $@
+client.o : client.c
+	$(CC) -c client.c -o $@
 
-echoser: echoser.o
-	$(CC) $(CFLAGS) $^ -o $@
+echocli: echocli.c
+	$(CC) $^ -o $@ $(LIBS)
 
-echocli: echocli.o
-	$(CC) $(CFLAGS) $^ -o $@
+timecli: timecli.c
+	$(CC) $^ -o $@ $(LIBS)
 
-timeser: timeser.o
-	$(CC) $(CFLAGS) $^ -o $@
 
-timecli: timecli.
-	$(CC) $(CFLAGS) $^ -o $@
-
-timecli.o:
-	$(CC) $(CFLAGS) -c $^ -o $@
-echocli.o: 
-	$(CC) $(CFLAGS) -c $^ -o $@
-
-echoser.o: echoser.c
-	$(CC) $(CFLAGS) -c $^ -o $@
-timeser.o: timeser.c
-	$(CC) $(CFLAGS) -c $^ -o $@
+clean:
+	rm *.o
+	rm $(TARGET)

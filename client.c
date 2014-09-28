@@ -20,11 +20,8 @@ void printHost(char* argv);
 
 
 int main(int argc,char* argv[]){
-    int fd;
-
-    struct sockaddr_in server_addr; 
-    char buf[MAX_SIZE];
     char input[MAX_SIZE];
+    char ip_address[64];
     
     pid_t cp;
 
@@ -67,16 +64,16 @@ int main(int argc,char* argv[]){
 	if(strcmp("echo\n",input) == 0){
 	    cp = fork();
 	    if(cp == 0){	// Child Process
-		execlp("xterm","xterm","-e","./echocli",host,(char*) 0);
+		execlp("xterm","xterm","-e","./echocli",ip_address,(char*) 0);
 	    }else{
-		wait();		// Handling SIGCHD signal
+		//wait();		// Handling SIGCHD signal
 	    }
 	}else if(strcmp("time\n",input) == 0){
 	    cp = fork();
 	    if(cp == 0){
-		execlp("xterm","xterm","-e","./timecli",host,(char*)0);
+		execlp("xterm","xterm","-e","./timecli",ip_address,(char*)0);
 	    }else{
-		wait();
+		//wait();
 	    }
 	}else if(strcmp("quit\n",input) == 0){
 	    /* Error Handler Required
@@ -106,7 +103,6 @@ void printHost(char* host){
 
     char** pptr;
     
-
     printf("** Host Information **\n");
     if((int)(addr = inet_addr(host)) == -1){
 	hp = gethostbyname(host);

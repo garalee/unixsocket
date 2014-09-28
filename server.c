@@ -5,63 +5,190 @@
 #include<sys/socket.h>
 #include<unistd.h>
 #include<stdlib.h>
+#include<errno.h>
 
-#define SERVER_PORT 9999
+#include<time.h>
+#include<sys/time.h>
+#include<pthread.h>
 
-#define MAXLINE 1024
+#define ECHO_PORT 9998
+#define TIME_PORT 9997
 
-void init_server_addr(struct sockaddr_in * sa);
-void str_echo(int sockfd);
+#define MAX_LISTEN 10
+#define MAX_SIZE 1024
+
+/* Socket Manager Variables */
+int sockets[MAX_LISTEN];	/* a list of socket descriptors, -1 as value if it's empty */
+pthread_t working_thread_t[MAX_LISTEN]; /* Working Thread id */
+struct sockaddr_in client_addrs[MAX_LISTEN]; /* a list of address struct for each connection */
+socklen_t client_addr_size;	/* Size of (struct client_addr_size) */
+unsigned int socket_counter = 0; /* The number of sockets established connection */
+/* ******************************** */
+/* Socket Manager helper functions */
+/* 
+ * These helper functions manage socket descriptors
+ * and keep track of threads corresponding to each socket descriptor.
+ * variables above must be accessed by functions who have SKMANAGER prefix.
+ * */
+int SKMANAGER_get_available();	/* get available socket descriptor from "sockets" list */
+void SKMANAGER_set_socket(int id,int sockfd); /* set socket descriptor on the list */
+void SKMANAGER_reset_socket(int id);	    /* set -1 on sockets[i] */
+
+
+void* echo_process(void* arg);
+void* time_process(void* arg);
 
 int main(void){
-    int serverfd,clientfd;
-    struct sockaddr_in server_addr,client_addr;
-    int clilen = 0;
-
-    serverfd = socket(AF_INET,SOCK_STREAM,0);
+    int timefd,echofd;
+    struct sockaddr_in time_addr,echo_addr;
+    int available_id;
+    int i;
     
-    init_server_addr(&server_addr);
+    
+    /* INIT Socket Manager */
+    for(i=0;i<MAX_LISTEN;++i)sockets[i] = -1;
+    client_addr_size = sizeof(struct sockaddr_in);
+    /* ******************* */
 
-    if (bind(serverfd,(struct sockaddr*)&server_addr,sizeof(struct sockaddr_in)) <0){
-	printf("Bind Error \n");
+    /* Prepare server for request */
+    timefd = socket(AF_INET,SOCK_STREAM,0);
+    echofd = socket(AF_INET,SOCK_STREAM,0);
+
+    bzero(&time_addr,sizeof(struct sockaddr_in));
+    bzero(&echo_addr,sizeof(struct sockaddr_in));
+
+    time_addr.sin_family = AF_INET;
+    echo_addr.sin_family = AF_INET;
+
+    time_addr.sin_port = htons(TIME_PORT);
+    echo_addr.sin_port = htons(ECHO_PORT);
+    
+    time_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    echo_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+
+    if (bind(timefd,(struct sockaddr*)&time_addr,sizeof(struct sockaddr_in)) <0){
+	printf("[TIME] Bind Error : %s\n",strerror(errno));
 	exit(-1);
     }
 
-    listen(serverfd,1);
+    if (bind(echofd,(struct sockaddr*)&echo_addr,sizeof(struct sockaddr_in)) <0){
+	printf("[ECHO] Bind Error : %s\n",strerror(errno));
+	exit(-1);
+    }
 
+    listen(echofd,MAX_LISTEN/2);
+    listen(timefd,MAX_LISTEN/2);
+   
+    
+    /* Service Begins */
     while(1){
-	clilen = sizeof(struct sockaddr_in);
-	clientfd = accept(serverfd,(struct sockaddr*)&client_addr,&clilen);
-	if( fork() == 0){	/* Child Process */
-	    close(serverfd);
-	    str_echo(clientfd);
-	    exit(0);
+	/* Handling Echo Request */
+	if(1){
+	    available_id = SKMANAGER_get_available();
+	    if(available_id == -1){
+		printf("[SERVER] Couldn't Afford to accept new request : %s\n",strerror(errno));
+		continue;
+	    }
+
+	    SKMANAGER_set_socket(available_id,accept(echofd,(struct sockaddr*)&client_addrs[available_id],&client_addr_size));
+	    
+	    pthread_create(&working_thread_t[available_id],NULL,echo_process,(void*)&available_id);
 	}
-	close(clientfd);
+
+	/* Handler Time Request */
+	if(1){
+	    available_id = SKMANAGER_get_available();
+	    if(available_id == -1){
+		printf("[SERVER] Couldn't Afford to accept new request : %s\n",strerror(errno));
+		continue;
+	    }
+
+	    SKMANAGER_set_socket(available_id,accept(timefd,(struct sockaddr*)&client_addrs[available_id],&client_addr_size));
+	    pthread_create(&working_thread_t[available_id],NULL,time_process,(void*)&available_id);
+	    
+	}
     }
     return 0;
-}
+}	
 
-void init_server_addr(struct sockaddr_in * sa){
-    bzero(sa,sizeof(struct sockaddr_in));
-    sa->sin_family = AF_INET;
-    sa->sin_addr.s_addr = htonl(INADDR_ANY);
-    sa->sin_port = htons(SERVER_PORT);
-}
 
-void str_echo(int sockfd){
-    ssize_t n;
-    char buf[MAXLINE];
+void* time_process(void* arg){
+    int id;
+    int sockfd;
+    time_t t;
+    char message[MAX_SIZE];
 
-again:
-    while ( (n = read(sockfd,buf,MAXLINE)) > 0){
-	printf("SERVER RECVED: %s\n",buf);
-	write(sockfd,buf,n);
+    id=*((int*)arg);
+    sockfd = sockets[id];
+    pthread_detach(pthread_self());
+    /* **************************************************************** */
+    /* TODO
+     * No Error Handler.
+     * Think about Error Scinario
+     * Signal Handler to break while loop to terminate server
+     * */
+
+
+    /* TO HANDLE ERROR */
+    /* Time server doesn't read from client so termination request from client
+     * should be handled by reading from client.
+     * */
+    while(1){
+	t = time(NULL);
+	snprintf(message, sizeof(message), "%.24s\r\n", ctime(&t));
+	write(sockfd, message, strlen(message));
+	sleep(5);
     }
-
-    if( n < 0)
-	printf("str_echo: read error\n");
-	
+    
+    printf("id:%d connection closed\n",id);
+    SKMANAGER_reset_socket(id);
+    close(sockfd);
+    return NULL;
 }
 
-	
+    
+void* echo_process(void* arg){
+    int id;
+    int sockfd;
+    int str_len;
+    char message[MAX_SIZE];
+
+    id = *((int*)arg);
+    sockfd = sockets[id];
+
+    pthread_detach(pthread_self());
+    /* **************************************************************** */
+    /* TODO
+     * No Error Handler.
+     * Think about Error Scinario
+     * Signal Handler to break while loop to terminate server
+     * */
+    while((str_len = read(sockfd, message, MAX_SIZE))!=0)
+	write(sockfd, message, str_len);
+    
+    printf("id:%d connection closed\n",id);
+    close(sockfd);
+    SKMANAGER_reset_socket(id);   
+    return NULL;
+}
+
+
+int SKMANAGER_get_available(){
+    int i;
+    for(i=0;i<MAX_LISTEN;++i){
+	if(sockets[i] == -1)
+	    return i;
+    }
+    return -1;
+}
+
+void SKMANAGER_set_socket(int id,int sockfd){
+    sockets[id] = sockfd;
+    socket_counter++;
+}
+
+void SKMANAGER_reset_socket(int id){
+    sockets[id] = -1;
+    socket_counter--;
+}

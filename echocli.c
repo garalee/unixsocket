@@ -14,21 +14,27 @@ int main(int argc, char *argv[])
 {
     int sockfd;
     char message[MAX_SIZE];
-    int str_len;
+    int str_len=argc;
     struct sockaddr_in server_addr;
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if(sockfd == -1){
-	printf("socket error : %s\n",strerror(errno));
+	printf("[ECHO] Socket Error : %s\n",strerror(errno));
+	exit(-1);
     }
   
-    serveraddr.sin_family = AF_INET;
-    serveraddr.sin_port = htons(ECHO_PORT);
-    inet_pton(AF_INET,argv[1],&server_addr.sin_addr);
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(ECHO_PORT);
+    if(inet_pton(AF_INET,argv[1],&server_addr.sin_addr) <= 0){
+	printf("[ECHO] inet_pton Error : %s\n",strerror(errno));
+	exit(-1);
+    }
+	
 
     if(connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1)
     {
-	printf(" Connection Error : %s\n",strerror(errno));
+	printf("[ECHO] Connection Error : %s\n",strerror(errno));
+	exit(0);
     }
 
 
@@ -41,12 +47,12 @@ int main(int argc, char *argv[])
      * Sending Message that recieved from server to its parent process(Need PIPE). 
      * 
      */
+
+    printf("[ECHO] Connection Established\n");
     while(1)
     {
-	printf("command(case-sensitive): ");
-	fgets(message,MAX_SIZE,stdin);
-
-	if(feof(message)){
+	printf("[ECHO] command(case-sensitive): ");
+	if(!fgets(message,MAX_SIZE,stdin)){
 	    printf("Sent EOF\n");
 	    break;
 	}
