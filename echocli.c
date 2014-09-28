@@ -56,7 +56,6 @@ int main(int argc, char *argv[])
 	    printf("Sent EOF\n");
 	    break;
 	}
-
 	write(sockfd, message, strlen(message));
 	str_len = read(sockfd, message, MAX_SIZE);
 	message[str_len] = 0;

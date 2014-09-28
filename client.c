@@ -20,10 +20,15 @@ void printHost(char* argv);
 
 
 int main(int argc,char* argv[]){
+    
     char input[MAX_SIZE];
     char ip_address[64];
-    
+    int input_len;
+
+    int fds[2];
+    int ipc;
     pid_t cp;
+    int result;
 
     /* Error Check the Number of Arguments */
     if( argc != 2 ){
@@ -31,7 +36,7 @@ int main(int argc,char* argv[]){
 	exit(0);
     }
 
-    printHost(argv[1]);		/* Print Out Peer Information */
+    printHost(argv[1],ip_address);		/* Print Out Peer Information */
     
 
     /* Socket Initialization 
@@ -58,45 +63,73 @@ int main(int argc,char* argv[]){
      * what if server is not listening for new incoming request.
      *
      * */
-    while(1){
+
+    pipe(fds);			/* Inter Process Communication */
+
+    while(1){	
 	printf("command(case-sensitive)[echo,time,quit]: "); // Command line
-	fgets(input,MAX_SIZE,stdin); /* Blocking IO Model */
-	if(strcmp("echo\n",input) == 0){
-	    cp = fork();
-	    if(cp == 0){	// Child Process
-		execlp("xterm","xterm","-e","./echocli",ip_address,(char*) 0);
-	    }else{
-		//wait();		// Handling SIGCHD signal
+
+	FD_ZERO(&ipc);
+	result = select(max(fds[0],fds[1])+1,&ipc,0,0,NULL);
+
+	if(result == -1){	/* ERROR HANDLER */
+	    printf("[CLIENT] function \"select\" error : %s\n",strerror(errno));
+	    continue;
+	}
+
+	if(FD_ISSET(0,&ipc)){
+	    input_len = fgets(input,MAX_SIZE,stdin); 
+
+	    /* TODO
+	     *
+	     * Sending termination signal to all of children processes */
+	    if(input_len == 0){	/* EOF */
+		printf("[CLIENT] program exit\n");
+		break;
 	    }
-	}else if(strcmp("time\n",input) == 0){
-	    cp = fork();
-	    if(cp == 0){
-		execlp("xterm","xterm","-e","./timecli",ip_address,(char*)0);
-	    }else{
-		//wait();
+
+	    if(input_len < 0 ){
+		printf("[CLIENT] Input Error : %s\n",strerror(errno));
+		continue;
 	    }
-	}else if(strcmp("quit\n",input) == 0){
-	    /* Error Handler Required
-	     * Expected Error : trying to close socket while few other process is still running
-	     *                  trying to close while server is closed already
-	     */
-	    break;
-	}else{
-	    char *p = strtok(input,"\n");
-	    printf("%s is not valid command\n",p);
+	    
+	    if(strcmp("echo\n",input) == 0){
+		cp = fork();
+		if(cp == 0){	// Child Process
+		    execlp("xterm","xterm","-e","./echocli",ip_address,(char*) 0);
+		}else{
+		    //wait();		// Handling SIGCHD signal
+		}
+	    }else if(strcmp("time\n",input) == 0){
+		cp = fork();
+		if(cp == 0){
+		    execlp("xterm","xterm","-e","./timecli",ip_address,(char*)0);
+		}else{
+		    //wait();
+		}
+	    }else if(strcmp("quit\n",input) == 0){
+		/* Error Handler Required
+		 * Expected Error:trying to close socket while few other process is still running
+		 *                trying to close while server is closed already
+		 */
+		break;
+	    }else{
+		char *p = strtok(input,"\n");
+		printf("command %s is not valid\n",p);
+	    }
+	}else if(FD_ISSET(fd[0],&ipc)){
+	    /* IPC : message from process */
 	}
     }
     /* ******************************************************Client Service */
-	
 
     printf("Program Exited Normally\n");
-
     return 0;
 }
 
 
 
-void printHost(char* host){
+void printHost(char* host,char* ip_address){
     in_addr_t addr;
     struct hostent *hp;
     struct in_addr in_addr;

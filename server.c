@@ -43,7 +43,9 @@ int main(void){
     struct sockaddr_in time_addr,echo_addr;
     int available_id;
     int i;
-    
+
+    int accept_request;
+    int result;
     
     /* INIT Socket Manager */
     for(i=0;i<MAX_LISTEN;++i)sockets[i] = -1;
@@ -79,34 +81,40 @@ int main(void){
 
     listen(echofd,MAX_LISTEN/2);
     listen(timefd,MAX_LISTEN/2);
-   
     
     /* Service Begins */
     while(1){
+	/* Multiplexing using Select*/
+	FD_ZERO(&accept_request);
+	result = select(max(echofd,timefd) + 1,&accept_request,0,0,NULL);	
+
+	/* Error Handler */
+	if(result == -1){
+	    printf("[Server] function \"select\" error : %s\n",strerror(errno));
+	    continue;
+	}
+	
 	/* Handling Echo Request */
-	if(1){
+	if(FD_ISSET(echofd,&accept_request)){
 	    available_id = SKMANAGER_get_available();
 	    if(available_id == -1){
 		printf("[SERVER] Couldn't Afford to accept new request : %s\n",strerror(errno));
 		continue;
 	    }
-
-	    SKMANAGER_set_socket(available_id,accept(echofd,(struct sockaddr*)&client_addrs[available_id],&client_addr_size));
 	    
+	    SKMANAGER_set_socket(available_id,accept(echofd,(struct sockaddr*)&client_addrs[available_id],&client_addr_size));
 	    pthread_create(&working_thread_t[available_id],NULL,echo_process,(void*)&available_id);
 	}
-
+	
 	/* Handler Time Request */
-	if(1){
+	if(FD_ISSET(timefd,&accept_request)){
 	    available_id = SKMANAGER_get_available();
 	    if(available_id == -1){
 		printf("[SERVER] Couldn't Afford to accept new request : %s\n",strerror(errno));
 		continue;
 	    }
-
 	    SKMANAGER_set_socket(available_id,accept(timefd,(struct sockaddr*)&client_addrs[available_id],&client_addr_size));
-	    pthread_create(&working_thread_t[available_id],NULL,time_process,(void*)&available_id);
-	    
+	    pthread_create(&working_thread_t[available_id],NULL,time_process,(void*)&available_id);   
 	}
     }
     return 0;
