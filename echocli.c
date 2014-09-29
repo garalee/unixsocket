@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
     if(inet_pton(AF_INET,argv[1],&server_addr.sin_addr) < 0){
 	sprintf(temp,"[ECHO] inet_pton Error : %s\n",strerror(errno));
 	/* THIS STATEMENT MAKES CLIENT FALL IN INFINITE LOOP */
-	//write(pipefd,temp,strlen(temp));
+	write(pipefd,temp,strlen(temp));
 	exit(-1);
     }
     
@@ -78,6 +78,7 @@ int main(int argc, char *argv[])
     
     sprintf(temp,"[ECHO] Process %ld is terminated normally\n",getpid());
     write(pipefd,temp,strlen(temp)); /* ERROR HANDLE? */
+    close(pipefd);
     close(sockfd);
     
     return 0;

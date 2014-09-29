@@ -70,7 +70,7 @@ int main(int argc,char* argv[]){
 	FD_SET(1,&ipc);
 	FD_SET(fds[0],&ipc);
 
-	result = select((fds[0]>fds[1]?fds[0]:fds[1]) +1,&ipc,0,0,NULL);
+	result = select(fds[0] +1,&ipc,0,0,NULL);
 	
 	if(result == -1){
 	    continue;
@@ -88,6 +88,7 @@ int main(int argc,char* argv[]){
 		printf("Echo Service Requested\n");
 		cp = fork();
 		if(cp == 0){	// Child Process
+		    close(fds[0]);
 		    execlp("xterm","xterm","-e","./echocli",ip_address,temp,(char*) 0);
 		    exit(0);
 		}
@@ -95,6 +96,7 @@ int main(int argc,char* argv[]){
 		printf("Time Service Requested\n");
 		cp = fork();     
 		if(cp == 0){
+		    close(fds[0]);
 		    execlp("xterm","xterm","-e","./timecli",ip_address,temp,(char*)0);
 		    exit(0);
 		}
@@ -113,12 +115,14 @@ int main(int argc,char* argv[]){
 		message[msg_len] = 0;
 		printf("%s",message);
 	    }else{
-		printf("PIPE LINE ERROR\n");
+		printf("PIPE LINE ERROR %s\n",strerror(errno));
 	    }
 	}
     }
     /* ******************************************************Client Service */
     
+    close(fds[0]);
+    close(fds[1]);
     printf("Program Exited Normally\n");
     return 0;
 }
