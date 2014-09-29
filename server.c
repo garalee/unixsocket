@@ -3,6 +3,7 @@
 #include<string.h>
 #include<sys/types.h>
 #include<sys/socket.h>
+#include<sys/select.h>
 #include<unistd.h>
 #include<stdlib.h>
 #include<errno.h>
@@ -44,7 +45,7 @@ int main(void){
     int available_id;
     int i;
 
-    int accept_request;
+    fd_set accept_request;
     int result;
     
     /* INIT Socket Manager */
@@ -86,7 +87,10 @@ int main(void){
     while(1){
 	/* Multiplexing using Select*/
 	FD_ZERO(&accept_request);
-	result = select(max(echofd,timefd) + 1,&accept_request,0,0,NULL);	
+	FD_SET(echofd,&accept_request);
+	FD_SET(timefd,&accept_request);
+
+	result = select((echofd>timefd?echofd:timefd) + 1,&accept_request,0,0,NULL);	
 
 	/* Error Handler */
 	if(result == -1){
@@ -105,7 +109,7 @@ int main(void){
 	    SKMANAGER_set_socket(available_id,accept(echofd,(struct sockaddr*)&client_addrs[available_id],&client_addr_size));
 	    pthread_create(&working_thread_t[available_id],NULL,echo_process,(void*)&available_id);
 	}
-	
+
 	/* Handler Time Request */
 	if(FD_ISSET(timefd,&accept_request)){
 	    available_id = SKMANAGER_get_available();
@@ -172,10 +176,13 @@ void* echo_process(void* arg){
      * Think about Error Scinario
      * Signal Handler to break while loop to terminate server
      * */
-    while((str_len = read(sockfd, message, MAX_SIZE))!=0)
+    while((str_len = read(sockfd, message, MAX_SIZE)) > 0){
+	message[str_len] = 0;
+	printf("[SERVER] ECHO MESSAGE from ID%d : %s",id,message);
 	write(sockfd, message, str_len);
+    }
     
-    printf("id:%d connection closed\n",id);
+    printf("ID:%d connection closed\n",id);
     close(sockfd);
     SKMANAGER_reset_socket(id);   
     return NULL;

@@ -9,19 +9,19 @@ LIBS = -pthread
 server : server.o
 	$(CC) $^ -o $@ $(LIBS)
 client : client.c echocli timecli
-	$(CC) client.c -o $@ $(LIBS)
+	$(CC) -g client.c -o $@ 
 
 server.o : server.c
 	$(CC) -c $^ -o $@
 
 client.o : client.c
-	$(CC) -c client.c -o $@
+	$(CC) -g -c client.c -o $@
 
 echocli: echocli.c
-	$(CC) $^ -o $@ $(LIBS)
+	$(CC) $^ -o $@ 
 
 timecli: timecli.c
-	$(CC) $^ -o $@ $(LIBS)
+	$(CC) $^ -o $@ 
 
 
 clean:

@@ -10,25 +10,35 @@
 #include<netdb.h>
 #include<arpa/inet.h>
 #include<errno.h>
+#include<signal.h>
+#include<sys/wait.h>
 
 #define MAX_SIZE 1024
 
 #define ECHO_PORT 9998
 #define TIME_PORT 9997
 
-void printHost(char* argv);
-
+void printHost(char* argv,char* ip_address);
+void sigchld_handler(int sig);
 
 int main(int argc,char* argv[]){
     
-    char input[MAX_SIZE];
-    char ip_address[64];
-    int input_len;
+    char input[MAX_SIZE];	/* input data from user */
+    int input_len;		/* input length from user*/
 
-    int fds[2];
-    int ipc;
-    pid_t cp;
-    int result;
+    char message[MAX_SIZE];	/* Message from pipe(child processes */
+    int msg_len;
+
+    char ip_address[64];	/* server ip address(presentation format) */
+
+    int fds[2];			/* ipc pipe fds[0] for reading fds[1] for writing */
+    fd_set ipc;			/* inter process communication pipe */
+    pid_t cp;			/* child process */
+    int result;			/* result of "select" function */
+
+    struct sigaction sa;	/* signal handler */
+    
+    char temp[8];		/* temporary char */
 
     /* Error Check the Number of Arguments */
     if( argc != 2 ){
@@ -38,22 +48,6 @@ int main(int argc,char* argv[]){
 
     printHost(argv[1],ip_address);		/* Print Out Peer Information */
     
-
-    /* Socket Initialization 
-    fd = socket(AF_INET,SOCK_STREAM,0);
-
-    if(fd < 0){
-	printf("Socket Error : %s\n",strerror(errno));
-    }
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = SERVER_PORT;
-    inet_pton(AF_INET,argv[1],&server_addr.sin_addr);
-
-    if(connect(fd,(struct sockaddr*)&server_addr,sizeof(server_addr)) < 0){
-	printf("Connection Error : %s\n",strerror(errno));
-    }
-    */
-
     /* ******************************************************************* */
     /**************** Client Service ************************************* */
     /* ******************************************************************* */
@@ -63,49 +57,46 @@ int main(int argc,char* argv[]){
      * what if server is not listening for new incoming request.
      *
      * */
+    pipe(fds);			/* Inter Process Communication between child and parent process */
+    sprintf(temp,"%d",fds[1]);
 
-    pipe(fds);			/* Inter Process Communication */
+    memset(&sa,0,sizeof(sa));	/* Signal Handler */
+    sa.sa_handler = sigchld_handler;
+    sigaction(SIGCHLD,&sa,NULL);
 
-    while(1){	
-	printf("command(case-sensitive)[echo,time,quit]: "); // Command line
-
+    while(1){ 
 	FD_ZERO(&ipc);
-	result = select(max(fds[0],fds[1])+1,&ipc,0,0,NULL);
+	FD_SET(0,&ipc);
+	FD_SET(1,&ipc);
+	FD_SET(fds[0],&ipc);
 
-	if(result == -1){	/* ERROR HANDLER */
-	    printf("[CLIENT] function \"select\" error : %s\n",strerror(errno));
+	result = select((fds[0]>fds[1]?fds[0]:fds[1]) +1,&ipc,0,0,NULL);
+	
+	if(result == -1){
 	    continue;
 	}
-
+	
 	if(FD_ISSET(0,&ipc)){
-	    input_len = fgets(input,MAX_SIZE,stdin); 
-
+	    /* TODO ERROR HANDLER
+	     * fgets error*/
+	    
+	    fgets(input,MAX_SIZE,stdin); 
 	    /* TODO
 	     *
 	     * Sending termination signal to all of children processes */
-	    if(input_len == 0){	/* EOF */
-		printf("[CLIENT] program exit\n");
-		break;
-	    }
-
-	    if(input_len < 0 ){
-		printf("[CLIENT] Input Error : %s\n",strerror(errno));
-		continue;
-	    }
-	    
 	    if(strcmp("echo\n",input) == 0){
+		printf("Echo Service Requested\n");
 		cp = fork();
 		if(cp == 0){	// Child Process
-		    execlp("xterm","xterm","-e","./echocli",ip_address,(char*) 0);
-		}else{
-		    //wait();		// Handling SIGCHD signal
+		    execlp("xterm","xterm","-e","./echocli",ip_address,temp,(char*) 0);
+		    exit(0);
 		}
 	    }else if(strcmp("time\n",input) == 0){
-		cp = fork();
+		printf("Time Service Requested\n");
+		cp = fork();     
 		if(cp == 0){
-		    execlp("xterm","xterm","-e","./timecli",ip_address,(char*)0);
-		}else{
-		    //wait();
+		    execlp("xterm","xterm","-e","./timecli",ip_address,temp,(char*)0);
+		    exit(0);
 		}
 	    }else if(strcmp("quit\n",input) == 0){
 		/* Error Handler Required
@@ -117,17 +108,36 @@ int main(int argc,char* argv[]){
 		char *p = strtok(input,"\n");
 		printf("command %s is not valid\n",p);
 	    }
-	}else if(FD_ISSET(fd[0],&ipc)){
-	    /* IPC : message from process */
+	}else if(FD_ISSET(fds[0],&ipc)){
+	    if((msg_len=read(fds[0],message,MAX_SIZE))>0){
+		message[msg_len] = 0;
+		printf("%s",message);
+	    }else{
+		printf("PIPE LINE ERROR\n");
+	    }
 	}
     }
     /* ******************************************************Client Service */
-
+    
     printf("Program Exited Normally\n");
     return 0;
 }
 
 
+/* TODO ERROR HANDLING
+ *
+ * If two or more processes are terminated simultaneously
+ * one or more SIGCHLD signal might be overlapped.
+ * Handler this !!
+ * */
+void sigchld_handler(int sig){
+    pid_t cp;
+    int status;
+
+    while((cp=waitpid(-1,&status,WNOHANG)) > 0){
+	printf("[CLIENT] process %ld terminated normally\n",cp);
+    }	    
+}
 
 void printHost(char* host,char* ip_address){
     in_addr_t addr;
