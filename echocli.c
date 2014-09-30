@@ -25,7 +25,7 @@ int main(int argc, char *argv[])
     pipefd = atoi(argv[2]);
 
     if(sockfd == -1){
-	sprintf(temp,"[ECHO] Socket Error : %s\n",strerror(errno));
+	sprintf(temp,"[ECHO] Socket Error : %s",strerror(errno));
 	write(pipefd,temp,strlen(temp));
 	exit(-1);
     }
@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
     /* ERROR HANDLING
      * */
     if(inet_pton(AF_INET,argv[1],&server_addr.sin_addr) < 0){
-	sprintf(temp,"[ECHO] inet_pton Error : %s\n",strerror(errno));
+	sprintf(temp,"[ECHO] inet_pton Error : %s",strerror(errno));
 	/* THIS STATEMENT MAKES CLIENT FALL IN INFINITE LOOP */
 	write(pipefd,temp,strlen(temp));
 	exit(-1);
@@ -44,7 +44,8 @@ int main(int argc, char *argv[])
     
     if(connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1)
     {
-	printf("[ECHO] Connection Error : %s\n",strerror(errno));
+	sprintf(temp,"[ECHO] connect Error : %s",strerror(errno));
+	write(pipefd,temp,strlen(temp));
 	exit(0);
     }
 

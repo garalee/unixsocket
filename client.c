@@ -90,6 +90,7 @@ int main(int argc,char* argv[]){
 		if(cp == 0){	// Child Process
 		    close(fds[0]);
 		    execlp("xterm","xterm","-e","./echocli",ip_address,temp,(char*) 0);
+		    close(fds[1]);
 		    exit(0);
 		}
 	    }else if(strcmp("time\n",input) == 0){
@@ -98,6 +99,7 @@ int main(int argc,char* argv[]){
 		if(cp == 0){
 		    close(fds[0]);
 		    execlp("xterm","xterm","-e","./timecli",ip_address,temp,(char*)0);
+		    close(fds[1]);
 		    exit(0);
 		}
 	    }else if(strcmp("quit\n",input) == 0){

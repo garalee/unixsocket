@@ -10,6 +10,8 @@
 
 #include<time.h>
 #include<sys/time.h>
+#include<sys/wait.h>
+#include<signal.h>
 #include<pthread.h>
 
 #define ECHO_PORT 9998
@@ -17,6 +19,10 @@
 
 #define MAX_LISTEN 10
 #define MAX_SIZE 1024
+
+void sigpipe_handler(int sig){
+    printf("Client Has Closed Connection\n");
+}
 
 /* Socket Manager Variables */
 int sockets[MAX_LISTEN];	/* a list of socket descriptors, -1 as value if it's empty */
@@ -48,6 +54,12 @@ int main(void){
     fd_set accept_request;
     int result;
     
+    struct sigaction sa;
+
+    memset(&sa,0,sizeof(sa));
+    sa.sa_handler = sigpipe_handler;
+    sigaction(SIGPIPE,&sa,NULL);
+
     /* INIT Socket Manager */
     for(i=0;i<MAX_LISTEN;++i)sockets[i] = -1;
     client_addr_size = sizeof(struct sockaddr_in);
@@ -89,8 +101,8 @@ int main(void){
 	FD_ZERO(&accept_request);
 	FD_SET(echofd,&accept_request);
 	FD_SET(timefd,&accept_request);
-
-	result = select((echofd>timefd?echofd:timefd) + 1,&accept_request,0,0,NULL);	
+	FD_SET(1,&accept_request);
+	result = select((echofd>timefd?echofd:timefd) + 1,&accept_request,0,0,NULL);
 
 	/* Error Handler */
 	if(result == -1){
@@ -121,6 +133,11 @@ int main(void){
 	    pthread_create(&working_thread_t[available_id],NULL,time_process,(void*)&available_id);   
 	}
     }
+
+    close(echofd);
+    close(timefd);
+
+
     return 0;
 }	
 
@@ -130,6 +147,7 @@ void* time_process(void* arg){
     int sockfd;
     time_t t;
     char message[MAX_SIZE];
+    int client_terminated=0;
 
     id=*((int*)arg);
     sockfd = sockets[id];
@@ -148,8 +166,13 @@ void* time_process(void* arg){
      * */
     while(1){
 	t = time(NULL);
-	snprintf(message, sizeof(message), "%.24s\r\n", ctime(&t));
-	write(sockfd, message, strlen(message));
+	snprintf(message, sizeof(message), "%.24s", ctime(&t));
+	client_terminated = write(sockfd, message, strlen(message));
+	/* If client is terminated while server is still writing on, quit */
+	if(client_terminated <= 0){
+	    printf("[TIME] Client Has Been Terminated : %s Handled\n",strerror(errno));
+	    break;
+	}
 	sleep(5);
     }
     
@@ -158,17 +181,16 @@ void* time_process(void* arg){
     close(sockfd);
     return NULL;
 }
-
     
 void* echo_process(void* arg){
     int id;
     int sockfd;
     int str_len;
+    int client_terminated;
     char message[MAX_SIZE];
 
     id = *((int*)arg);
     sockfd = sockets[id];
-
     pthread_detach(pthread_self());
     /* **************************************************************** */
     /* TODO
@@ -176,10 +198,27 @@ void* echo_process(void* arg){
      * Think about Error Scinario
      * Signal Handler to break while loop to terminate server
      * */
-    while((str_len = read(sockfd, message, MAX_SIZE)) > 0){
+    while(1){
+
+	str_len = read(sockfd,message,MAX_SIZE);
+	if(str_len == 0){
+	    printf("[ECHO] EOF TERMINATION\n");
+	    break;
+	}
+
+	if(str_len < 0){
+	    printf("[ECHO] Client Has Been Terminated\n");
+	    break;
+	}
+
 	message[str_len] = 0;
 	printf("[SERVER] ECHO MESSAGE from ID%d : %s",id,message);
-	write(sockfd, message, str_len);
+	client_terminated = write(sockfd, message, str_len);
+	if(client_terminated < 0){
+	    printf("[ECHO] Client Has Been Terminated : %s Handled\n",strerror(errno));
+	    break;
+	}
+
     }
     
     printf("ID:%d connection closed\n",id);
