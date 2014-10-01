@@ -18,7 +18,7 @@
 #define ECHO_PORT 9998
 #define TIME_PORT 9997
 
-void printHost(char* argv,char* ip_address);
+int printHost(char* argv,char* ip_address);
 void sigchld_handler(int sig);
 
 int main(int argc,char* argv[]){
@@ -46,7 +46,10 @@ int main(int argc,char* argv[]){
 	exit(0);
     }
 
-    printHost(argv[1],ip_address);		/* Print Out Peer Information */
+    if(printHost(argv[1],ip_address) == 0){		/* Print Out Peer Information */
+	printf("[CLIENT] Program Exited\n");
+	exit(0);
+    }
     
     /* ******************************************************************* */
     /**************** Client Service ************************************* */
@@ -145,38 +148,42 @@ void sigchld_handler(int sig){
     }	    
 }
 
-void printHost(char* host,char* ip_address){
+int printHost(char* host,char* ip_address){
     in_addr_t addr;
     struct hostent *hp;
     struct in_addr in_addr;
 
     char** pptr;
     
-    printf("** Host Information **\n");
+    printf("[CLIENT] ** Host Information **\n");
     if((int)(addr = inet_addr(host)) == -1){
 	hp = gethostbyname(host);
 	if( hp != NULL){
 	    //in_addr = *(struct in_addr*)(hp->h_addr);
-	    printf("Official Server Host Name :  %s\n",hp->h_name);
+	    printf("[CLIENT] Official Server Host Name :  %s\n",hp->h_name);
 	    for(pptr = hp->h_addr_list; *pptr != NULL ; ++pptr){
 		memcpy(&in_addr.s_addr,*pptr,sizeof(in_addr.s_addr));
-		printf("The IP address of Server Host(%s) : %s\n",host,inet_ntoa(in_addr));
+		printf("[CLIENT] The IP address of Server Host(%s) : %s\n",host,inet_ntoa(in_addr));
 	    }
 	}else{
-	    printf("%s was not resolved\n",host);
+	    printf("[CLIENT] %s was not resolved\n",host);
+	    return 0;
 	}
     }else{
 	inet_pton(AF_INET,host,&in_addr);
 	hp = gethostbyaddr((void*)&in_addr,sizeof(in_addr),AF_INET);
 	if ( hp != NULL){
-	    printf("Official Server Host Name: %s\n",hp->h_name);
+	    printf("[CLIENT] Official Server Host Name: %s\n",hp->h_name);
 	    
 	    for(pptr = hp->h_addr_list;*pptr!=NULL;++pptr){
 		memcpy(&in_addr.s_addr,*pptr,sizeof(in_addr.s_addr));
-		printf("The Host Name of Server Host(%s) : %s\n",host,inet_ntoa(in_addr));
+		printf("[CLIENT] The Host Name of Server Host(%s) : %s\n",host,inet_ntoa(in_addr));
 	    }
 	}else{
-	    printf("Host Information for %s not found\n",host);
+	    printf("[CLIENT] Host Information for %s not found\n",host);
+	    return 0;
 	}
     } 
+
+    return 1;
 }

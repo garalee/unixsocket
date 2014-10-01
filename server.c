@@ -21,7 +21,7 @@
 #define MAX_SIZE 1024
 
 void sigpipe_handler(int sig){
-    printf("Client Has Closed Connection\n");
+    printf("Client Has Been Closed Connection\n");
 }
 
 /* Socket Manager Variables */
@@ -40,7 +40,6 @@ unsigned int socket_counter = 0; /* The number of sockets established connection
 int SKMANAGER_get_available();	/* get available socket descriptor from "sockets" list */
 void SKMANAGER_set_socket(int id,int sockfd); /* set socket descriptor on the list */
 void SKMANAGER_reset_socket(int id);	    /* set -1 on sockets[i] */
-
 
 void* echo_process(void* arg);
 void* time_process(void* arg);
@@ -81,7 +80,6 @@ int main(void){
     time_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     echo_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-
     if (bind(timefd,(struct sockaddr*)&time_addr,sizeof(struct sockaddr_in)) <0){
 	printf("[TIME] Bind Error : %s\n",strerror(errno));
 	exit(-1);
@@ -94,6 +92,8 @@ int main(void){
 
     listen(echofd,MAX_LISTEN/2);
     listen(timefd,MAX_LISTEN/2);
+
+    printf("[SERVER] Server is Listening....\n");
     
     /* Service Begins */
     while(1){
@@ -161,7 +161,7 @@ void* time_process(void* arg){
 
 
     /* TO HANDLE ERROR */
-    /* Time server doesn't read from client so termination request from client
+    /* Time Server doesn't read from client so termination request from client
      * should be handled by reading from client.
      * */
     while(1){
@@ -173,7 +173,9 @@ void* time_process(void* arg){
 	    printf("[TIME] Client Has Been Terminated : %s Handled\n",strerror(errno));
 	    break;
 	}
+
 	sleep(5);
+
     }
     
     printf("id:%d connection closed\n",id);
@@ -199,15 +201,14 @@ void* echo_process(void* arg){
      * Signal Handler to break while loop to terminate server
      * */
     while(1){
-
 	str_len = read(sockfd,message,MAX_SIZE);
 	if(str_len == 0){
-	    printf("[ECHO] EOF TERMINATION\n");
+	    printf("[ECHO] EOF TERMINATION : %s\n",strerror(errno));
 	    break;
 	}
 
 	if(str_len < 0){
-	    printf("[ECHO] Client Has Been Terminated\n");
+	    printf("[ECHO] Client Has Been Terminated : %s Handled\n",strerror(errno));
 	    break;
 	}
 

@@ -47,7 +47,7 @@ int main(int argc, char** argv)
     pipefd = atoi(argv[2]);
 
     if(sockfd == -1){
-	sprintf(temp,"[TIME] Socket Error : %s",strerror(errno));
+	sprintf(temp,"[TIME] Socket Error : %s\n",strerror(errno));
 	write(pipefd,temp,strlen(temp));
 	exit(-1);
     }
@@ -56,14 +56,14 @@ int main(int argc, char** argv)
     server_addr.sin_port = htons(TIME_PORT);
     
     if(inet_pton(AF_INET, argv[1], &server_addr.sin_addr) < 0){
-	sprintf(temp,"[TIME] inet_pton Error : %s",strerror(errno));
+	sprintf(temp,"[TIME] inet_pton Error : %s\n",strerror(errno));
 	/* THIS STATEMENT MAKES CLIENT.c FALL IN INFINITE LOOP */
 	write(pipefd,temp,strlen(temp));
 	exit(-1);
     }
 	
     if(connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1){
-	sprintf(temp,"[TIME] Connection Error : %s",strerror(errno));
+	sprintf(temp,"[TIME] Connection Error : %s\n",strerror(errno));
 	write(pipefd,temp,strlen(temp));
 	exit(0);
     }
@@ -80,10 +80,16 @@ int main(int argc, char** argv)
 	}
 
 	/* TODO ERROR HANDLING */
-	if(str_len < 0){
-	    printf("READ ERROR : %s\n",strerror(errno));
+	if(str_len <= 0){
+	    sprintf(temp,"[TIME] Server Has Crashed. Please Connect few seconds later : %s\n",strerror(errno));
+	    write(pipefd,temp,strlen(temp));
+	    break;
 	}
     }
+
+    sprintf(temp,"[TIME] Service Terminated : Process ID(%ld)\n",getpid());
+    write(pipefd,temp,strlen(temp));
+    close(sockfd);
 
     return 0;
 }
