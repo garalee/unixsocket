@@ -6,6 +6,8 @@ OBJECTS = echocli.o timecli.o server.o client.o
 TARGET = server client echocli timecli
 LIBS = -pthread
 
+all: server client
+
 server : server.o
 	$(CC) $^ -o $@ $(LIBS)
 client : client.c echocli timecli
@@ -22,7 +24,6 @@ echocli: echocli.c
 
 timecli: timecli.c
 	$(CC) $^ -o $@ 
-
 
 clean:
 	rm *.o

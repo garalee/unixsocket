@@ -16,7 +16,6 @@
 #define TIME_PORT 9997
 #define	MAX_SIZE 1024   
 
-
 int pipefd;
 int sockfd;
 
@@ -27,7 +26,6 @@ void sigint_handler(int sig){
     close(sockfd);
     exit(0);
 }
-    
 
 int main(int argc, char** argv)
 {
@@ -68,6 +66,13 @@ int main(int argc, char** argv)
 	exit(0);
     }
     
+    struct linger lin;
+    lin.l_onoff = 1;
+    lin.l_linger = 0;
+    if(setsockopt(sockfd,SOL_SOCKET,SO_LINGER,(void*)&lin,sizeof(lin))){
+    	printf("[SERVER] TEST : %s\n",strerror(errno));
+    }
+
     printf("[TIME] Connection Established\n");
     while(1)
     {  

@@ -31,6 +31,8 @@ struct sockaddr_in client_addrs[MAX_LISTEN]; /* a list of address struct for eac
 socklen_t client_addr_size;	/* Size of (struct client_addr_size) */
 unsigned int socket_counter = 0; /* The number of sockets established connection */
 /* ******************************** */
+
+pthread_mutex_t lock;
 /* Socket Manager helper functions */
 /* 
  * These helper functions manage socket descriptors
@@ -45,6 +47,7 @@ void* echo_process(void* arg);
 void* time_process(void* arg);
 
 int main(void){
+    int fd;
     int timefd,echofd;
     struct sockaddr_in time_addr,echo_addr;
     int available_id;
@@ -58,6 +61,11 @@ int main(void){
     memset(&sa,0,sizeof(sa));
     sa.sa_handler = sigpipe_handler;
     sigaction(SIGPIPE,&sa,NULL);
+
+    if(pthread_mutex_init(&lock,NULL) != 0){
+	printf("[SERVER] mutex init failed : %s\n",strerror(errno));
+	exit(0);
+    }
 
     /* INIT Socket Manager */
     for(i=0;i<MAX_LISTEN;++i)sockets[i] = -1;
@@ -90,8 +98,8 @@ int main(void){
 	exit(-1);
     }
 
-    listen(echofd,MAX_LISTEN/2);
-    listen(timefd,MAX_LISTEN/2);
+    listen(echofd,MAX_LISTEN);
+    listen(timefd,MAX_LISTEN);
 
     printf("[SERVER] Server is Listening....\n");
     
@@ -112,31 +120,59 @@ int main(void){
 	
 	/* Handling Echo Request */
 	if(FD_ISSET(echofd,&accept_request)){
+	    printf("[SERVER] Echo Service Requested\n");
 	    available_id = SKMANAGER_get_available();
 	    if(available_id == -1){
-		printf("[SERVER] Couldn't Afford to accept new request : %s\n",strerror(errno));
+		printf("[SERVER] Couldn't Afford to accept new reques\n",strerror(errno));
+		/* Send Connection Refuse */
+		exit(0);
+	    }
+	    
+
+	    /* Accept Funcion Error Handling */
+	    fd = accept(echofd,(struct sockaddr*)&client_addrs[available_id],&client_addr_size);
+	    if( fd < 0){
+		printf("[SERVER] Accept Error : %s",strerror(errno));
 		continue;
 	    }
 	    
-	    SKMANAGER_set_socket(available_id,accept(echofd,(struct sockaddr*)&client_addrs[available_id],&client_addr_size));
-	    pthread_create(&working_thread_t[available_id],NULL,echo_process,(void*)&available_id);
+	    pthread_mutex_lock(&lock);
+	    SKMANAGER_set_socket(available_id,fd);
+	    pthread_mutex_unlock(&lock);
+	    if(pthread_create(&working_thread_t[available_id],NULL,echo_process,(void*)&available_id) < 0){
+		printf("[SERVER] pthread Error : %s\n",strerror(errno));
+		exit(0);
+	    }
 	}
 
 	/* Handler Time Request */
 	if(FD_ISSET(timefd,&accept_request)){
+	    printf("[SERVER] Time Service Requested\n");
 	    available_id = SKMANAGER_get_available();
 	    if(available_id == -1){
 		printf("[SERVER] Couldn't Afford to accept new request : %s\n",strerror(errno));
+		/* Send Connection Refuse */
+	    }
+
+	    fd = accept(timefd,(struct sockaddr*)&client_addrs[available_id],&client_addr_size);
+	    if( fd < 0){
+		printf("[SERVER] Accept Error : %s",strerror(errno));
 		continue;
 	    }
-	    SKMANAGER_set_socket(available_id,accept(timefd,(struct sockaddr*)&client_addrs[available_id],&client_addr_size));
-	    pthread_create(&working_thread_t[available_id],NULL,time_process,(void*)&available_id);   
+	    
+	    pthread_mutex_lock(&lock);	
+	    SKMANAGER_set_socket(available_id,fd);
+	    pthread_mutex_unlock(&lock);
+
+	    if(pthread_create(&working_thread_t[available_id],NULL,time_process,(void*)&available_id) < 0){
+		printf("[SERVER] pthread Error : %s\n",strerror(errno));
+		exit(0);
+	    }
 	}
     }
 
     close(echofd);
     close(timefd);
-
 
     return 0;
 }	
@@ -149,8 +185,10 @@ void* time_process(void* arg){
     char message[MAX_SIZE];
     int client_terminated=0;
 
+
     id=*((int*)arg);
     sockfd = sockets[id];
+
     pthread_detach(pthread_self());
     /* **************************************************************** */
     /* TODO
@@ -164,6 +202,7 @@ void* time_process(void* arg){
     /* Time Server doesn't read from client so termination request from client
      * should be handled by reading from client.
      * */
+
     while(1){
 	t = time(NULL);
 	snprintf(message, sizeof(message), "%.24s", ctime(&t));
@@ -179,7 +218,11 @@ void* time_process(void* arg){
     }
     
     printf("id:%d connection closed\n",id);
+
+    pthread_mutex_lock(&lock);
     SKMANAGER_reset_socket(id);
+    pthread_mutex_unlock(&lock);
+
     close(sockfd);
     return NULL;
 }
@@ -194,10 +237,11 @@ void* echo_process(void* arg){
     id = *((int*)arg);
     sockfd = sockets[id];
     pthread_detach(pthread_self());
+    /* ************** */
     /* **************************************************************** */
     /* TODO
      * No Error Handler.
-     * Think about Error Scinario
+     * Think about Error Scenario
      * Signal Handler to break while loop to terminate server
      * */
     while(1){
